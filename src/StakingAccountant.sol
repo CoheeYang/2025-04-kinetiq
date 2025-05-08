@@ -164,7 +164,7 @@ contract StakingAccountant is IStakingAccountant, Initializable, AccessControlEn
         require(index < _uniqueTokens.length(), "Index out of bounds");
         return _uniqueTokens.at(index);
     }
-
+///things to check
     function totalRewards() external view override returns (uint256) {
         return validatorManager.totalRewards();
     }
@@ -216,6 +216,6 @@ contract StakingAccountant is IStakingAccountant, Initializable, AccessControlEn
         uint256 totalHYPE = totalStaked + rewardsAmount - totalClaimed - slashingAmount;
 
         // Calculate ratio with 18 decimals precision
-        return Math.mulDiv(totalHYPE, 1e18, totalKHYPESupply);
+        return Math.mulDiv(totalHYPE, 1e18, totalKHYPESupply); 
     }
 }

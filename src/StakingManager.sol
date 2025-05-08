@@ -47,7 +47,7 @@ contract StakingManager is
     L1Write public constant l1Write = L1Write(0x3333333333333333333333333333333333333333);
 
     // Basis points constant for percentage calculations
-    uint256 public constant BASIS_POINTS = 10000; // 100% in basis points
+    uint256 public constant BASIS_POINTS = 10_000; // 100% in basis points
 
     // Roles
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
@@ -207,8 +207,8 @@ contract StakingManager is
      */
     receive() external payable {
         // Simply call the stake function
-        stake();
-    }
+        stake();//@audit any external call to call this to make protocal to stake eth for hacker?
+    }///@note oz的透明代理合约的fallback可以在直接转账后调用这个函数
 
     /* ========== STAKING FUNCTIONS ========== */
 
@@ -227,11 +227,11 @@ contract StakingManager is
         if (maxStakeAmount > 0) {
             require(msg.value <= maxStakeAmount, "Stake amount above maximum");
         }
-        if (stakingLimit > 0) {
+        if (stakingLimit > 0) {//总限制
             // Get rewards from ValidatorManager to account for earned rewards
             // This approach uses global rewards but provides a reasonable approximation
             // for this StakingManager's available capacity
-            uint256 rewardsAmount = validatorManager.totalRewards();
+            uint256 rewardsAmount = validatorManager.totalRewards();//total reward只增不减啊？
             uint256 netStaked = totalStaked + rewardsAmount - totalClaimed;
             require(netStaked + msg.value <= stakingLimit, "Staking limit reached");
         }
@@ -239,14 +239,14 @@ contract StakingManager is
         totalStaked += msg.value;
 
         // Convert HYPE to kHYPE amount using exchange ratio
-        uint256 kHYPEAmount = stakingAccountant.HYPEToKHYPE(msg.value);
+        uint256 kHYPEAmount = stakingAccountant.HYPEToKHYPE(msg.value);//(msg.value*1e18)/exchangeRatio TODO check exchangeRatio
 
         // Mint kHYPE tokens based on the conversion
         kHYPE.mint(msg.sender, kHYPEAmount);
 
-        _distributeStake(msg.value, OperationType.UserDeposit);
+        _distributeStake(msg.value, OperationType.UserDeposit);//分配收到的资金，一部分放在这里作为buffer，多的转入L1合约
 
-        stakingAccountant.recordStake(msg.value);
+        stakingAccountant.recordStake(msg.value);// stakingAccountant.totalStaked += amount; @audit Invariant? 两个totalstake相等？
 
         emit StakeReceived(address(this), msg.sender, msg.value);
     }
@@ -262,11 +262,11 @@ contract StakingManager is
         require(kHYPEAmount > 0, "Invalid amount");
         require(kHYPE.balanceOf(msg.sender) >= kHYPEAmount, "Insufficient kHYPE balance");
 
-        uint256 withdrawalId = nextWithdrawalId[msg.sender];
+        uint256 withdrawalId = nextWithdrawalId[msg.sender];//？
 
         // Calculate fee in kHYPE using mulDiv for precision
         // kHYPEAmount is in 8 decimals
-        uint256 kHYPEFee = msg.sender == treasury ? 0 : Math.mulDiv(kHYPEAmount, unstakeFeeRate, BASIS_POINTS);
+        uint256 kHYPEFee = msg.sender == treasury ? 0 : Math.mulDiv(kHYPEAmount, unstakeFeeRate, BASIS_POINTS);//bug treasury也要经过额度检查？我一点取那不就没手续费了吗？而且HyperLiquidity还没gas费
         uint256 postFeeKHYPE = kHYPEAmount - kHYPEFee;
 
         // Convert post-fee kHYPE to HYPE using StakingAccountant
@@ -282,9 +282,9 @@ contract StakingManager is
             kHYPEAmount: postFeeKHYPE,
             kHYPEFee: kHYPEFee,
             timestamp: block.timestamp
-        });
+        });//this timestamp is too weak to prevent the bug 
 
-        nextWithdrawalId[msg.sender]++;
+        nextWithdrawalId[msg.sender]++;//？真的被正确处理了吗？
         totalQueuedWithdrawals += hypeAmount;
 
         // Withdraw from current delegation
@@ -304,10 +304,10 @@ contract StakingManager is
         require(amount > 0, "No valid withdrawal request");
         require(address(this).balance >= amount, "Insufficient contract balance");
 
-        stakingAccountant.recordClaim(amount);
+        stakingAccountant.recordClaim(amount);//bug donation attack making contract 
 
         // Process withdrawal using call instead of transfer
-        (bool success, ) = payable(msg.sender).call{value: amount}("");
+        (bool success, ) = payable(msg.sender).call{value: amount}("");///@audit external call
         require(success, "Transfer failed");
     }
 
@@ -329,8 +329,8 @@ contract StakingManager is
             require(success, "Transfer failed");
         }
     }
-
-    /**
+  
+    /** 
      * @notice Process validator withdrawals requested by ValidatorManager
      * @param validators Array of validator addresses
      * @param amounts Array of amounts to withdraw
@@ -344,7 +344,7 @@ contract StakingManager is
         require(validators.length > 0, "Empty arrays");
 
         for (uint256 i = 0; i < validators.length; ) {
-            require(amounts[i] > 0, "Invalid amount");
+            require(amounts[i] > 0, "Invalid amount");//for循环中的require非常可怕，但是这里没问题，因为输入可控
 
             // Use RebalanceWithdrawal type
             _withdrawFromValidator(validators[i], amounts[i], OperationType.RebalanceWithdrawal);
@@ -435,19 +435,19 @@ contract StakingManager is
         // Get the current delegation target
         address validator = validatorManager.getDelegation(address(this));
 
-        // For user deposits, handle buffer first
+        // For user deposits, handle buffer first（buffer是储备资金，免去每次从validator中提取资金）
         if (operationType == OperationType.UserDeposit) {
             // Check that amount can be cleanly divided into 8 decimals
-            require(amount % 1e10 == 0, "Amount must be divisible by 1e10");
+            require(amount % 1e10 == 0, "Amount must be divisible by 1e10");// 18decimal转成8decimal一定要成功
 
             // Handle buffer first
             uint256 currentBuffer = hypeBuffer;
             uint256 target = targetBuffer;
-            if (amount > 0 && currentBuffer < target) {
-                uint256 bufferSpace = target - currentBuffer;
+            if (amount > 0 && currentBuffer < target) {//存在target buffer还剩下空间，先存入buffer
+                uint256 bufferSpace = target - currentBuffer;//不会负数
                 uint256 amountToBuffer = Math.min(amount, bufferSpace);
-                hypeBuffer = currentBuffer + amountToBuffer;
-                amount -= amountToBuffer;
+                hypeBuffer = currentBuffer + amountToBuffer;//增加的buffer
+                amount -= amountToBuffer;//由于min不会负数
 
                 emit BufferIncreased(amountToBuffer, hypeBuffer);
             }
@@ -459,7 +459,7 @@ contract StakingManager is
 
             // Ensure amount after buffer is still divisible by 1e10
             uint256 remainder = amount % 1e10;
-            if (remainder > 0) {
+            if (remainder > 0) {//二次转化保证能被整除
                 // Add the remainder to the buffer
                 hypeBuffer += remainder;
                 amount -= remainder;
@@ -473,15 +473,15 @@ contract StakingManager is
 
             // For user deposits, move HYPE from EVM to spot balance
             // 1. Move HYPE from EVM to spot balance on L1 by sending directly to L1 address
-            (bool success, ) = payable(L1_HYPE_CONTRACT).call{value: amount}("");
+            (bool success, ) = payable(L1_HYPE_CONTRACT).call{value: amount}("");//把剩余的Hype转到L1合约
             require(success, "Failed to send HYPE to L1");
 
             // 2. Move from spot balance to staking balance using cDeposit
             uint256 truncatedAmount = _convertTo8Decimals(amount, false);
-            l1Write.sendCDeposit(uint64(truncatedAmount));
+            l1Write.sendCDeposit(uint64(truncatedAmount));//emit存入金额
 
             // 3. Queue the delegation operation (8 decimals)
-            _queueL1Operation(validator, truncatedAmount, operationType);
+            _queueL1Operation(validator, truncatedAmount, operationType);//排队处理
         } else if (operationType == OperationType.SpotDeposit) {
             // For spot deposits, first move from spot balance to staking balance
             uint256 truncatedAmount = _convertTo8Decimals(amount, false);
@@ -505,6 +505,7 @@ contract StakingManager is
         emit Delegate(address(this), validator, amount);
     }
 
+      // called by `queueWithdrawal()`,`processValidatorWithdrawals`
     /**
      * @notice Internal function to withdraw from validator
      * @param validator Validator address

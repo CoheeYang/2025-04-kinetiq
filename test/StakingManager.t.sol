@@ -85,6 +85,30 @@ contract StakingManagerTest is BaseTest {
         assertEq(stakingManager.totalStaked(), stakeAmount);
         assertEq(kHYPE.balanceOf(user), stakeAmount);
     }
+    //@audit add by me 
+    function test_Stake_receive() public {
+        uint256 stakeAmount = 1 ether;
+
+        // Set up delegation first
+        vm.startPrank(manager);
+        validatorManager.activateValidator(validator);
+        validatorManager.setDelegation(address(stakingManager), validator);
+        vm.stopPrank();
+
+        vm.deal(user, stakeAmount);
+        vm.prank(user);
+
+        // Check for the correct event
+        vm.expectEmit(true, true, false, true);
+        emit StakeReceived(address(stakingManager), user, stakeAmount);
+
+        // stakingManager.stake{value: stakeAmount}();
+        (bool suc,) = address(stakingManager).call{value: stakeAmount}("");
+        require(suc, "Stake failed");
+        assertEq(stakingManager.totalStaked(), stakeAmount);
+        assertEq(kHYPE.balanceOf(user), stakeAmount);
+    }
+
 
     function test_QueueWithdrawal_Success() public {
         uint256 amount = 1 ether;

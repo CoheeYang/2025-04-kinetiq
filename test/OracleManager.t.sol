@@ -182,8 +182,11 @@ contract OracleManagerTest is BaseTest {
 
         // Generate performance
         vm.prank(operator);
-        oracleManager.generatePerformance(testValidator);
-
+        uint256 gas1= gasleft();
+       bool state = oracleManager.generatePerformance(testValidator);
+        uint256 gas2= gasleft();
+        console.log("Gas used for generatePerformance: ", gas1-gas2);
+        assert(state);
         // Verify validator info
         IValidatorManager.Validator memory validatorInfo = validatorManager.validatorInfo(testValidator);
         assertEq(validatorInfo.balance, 0.1 ether);

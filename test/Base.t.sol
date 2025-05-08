@@ -59,15 +59,15 @@ contract BaseTest is Test {
     function setUp() public virtual {
         console.log("Starting setUp");
 
-        // Deploy L1Write at specific address
+    // Deploy L1Write at specific address
         L1Write l1WriteImpl = new L1Write();
-        vm.etch(L1WRITE, address(l1WriteImpl).code);
+        vm.etch(L1WRITE, address(l1WriteImpl).code);//添加HyperLiquid链上的预编译补充
 
-        // Deploy minimal implementation for proxies
+    // Deploy minimal implementation for proxies
         MinimalImplementation minimalImpl = new MinimalImplementation();
-        console.log("Minimal implementation deployed at:", address(minimalImpl));
+        console.log("Minimal implementation deployed at:", address(minimalImpl));//空逻辑合约
 
-        // Deploy proxies - each will create its own ProxyAdmin
+    // Deploy proxies - each will create its own ProxyAdmin
         console.log("Deploying proxies...");
         TransparentUpgradeableProxy pauserRegistryProxy = new TransparentUpgradeableProxy(
             address(minimalImpl),
@@ -119,7 +119,7 @@ contract BaseTest is Test {
         address stakingAccountantAdmin = _getProxyAdmin(address(stakingAccountantProxy));
         console.log("StakingAccountant admin at:", stakingAccountantAdmin);
 
-        // Cast proxies
+    // Cast proxies，创建逻辑合约，强制将proxy合约转为逻辑合约类型，以便调用测试函数
         pauserRegistry = PauserRegistry(address(pauserRegistryProxy));
         stakingManager = StakingManager(payable(address(stakingManagerProxy)));
         kHYPE = KHYPE(address(kHYPEProxy));
@@ -130,7 +130,7 @@ contract BaseTest is Test {
         vm.startPrank(admin);
         console.log("Started admin prank");
 
-        // Create array of pausable contracts
+    // Create array of pausable contracts
         console.log("Creating pausable contracts array");
         address[] memory pausableContracts = new address[](4);
         pausableContracts[0] = address(stakingManager);
@@ -138,7 +138,7 @@ contract BaseTest is Test {
         pausableContracts[2] = address(validatorManager);
         pausableContracts[3] = address(oracleManager);
 
-        // Initialize PauserRegistry
+    // Initialize PauserRegistry
         ProxyAdmin(pauserRegistryAdmin).upgradeAndCall(
             ITransparentUpgradeableProxy(address(pauserRegistry)),
             address(new PauserRegistry()),
@@ -152,7 +152,7 @@ contract BaseTest is Test {
             )
         );
 
-        // Initialize KHYPE
+    // Initialize KHYPE
         ProxyAdmin(kHYPEAdmin).upgradeAndCall(
             ITransparentUpgradeableProxy(address(kHYPE)),
             address(new KHYPE()),
@@ -167,7 +167,7 @@ contract BaseTest is Test {
             )
         );
 
-        // Initialize ValidatorManager
+    // Initialize ValidatorManager
         ProxyAdmin(validatorManagerAdmin).upgradeAndCall(
             ITransparentUpgradeableProxy(address(validatorManager)),
             address(new ValidatorManager()),
@@ -180,7 +180,7 @@ contract BaseTest is Test {
             )
         );
 
-        // Initialize StakingAccountant
+    // Initialize StakingAccountant
         ProxyAdmin(stakingAccountantAdmin).upgradeAndCall(
             ITransparentUpgradeableProxy(address(stakingAccountant)),
             address(new StakingAccountant()),
@@ -193,7 +193,7 @@ contract BaseTest is Test {
             )
         );
 
-        // Initialize StakingManager with StakingAccountant
+    // Initialize StakingManager with StakingAccountant
         ProxyAdmin(stakingManagerAdmin).upgradeAndCall(
             ITransparentUpgradeableProxy(address(stakingManager)),
             address(new StakingManager()),
@@ -215,7 +215,7 @@ contract BaseTest is Test {
             )
         );
 
-        // Initialize OracleManager
+    // Initialize OracleManager
         ProxyAdmin(oracleManagerAdmin).upgradeAndCall(
             ITransparentUpgradeableProxy(address(oracleManager)),
             address(new OracleManager()),
@@ -231,7 +231,7 @@ contract BaseTest is Test {
         );
         vm.stopPrank();
 
-        // Setup roles
+    // Setup roles
         vm.startPrank(manager);
         stakingAccountant.authorizeStakingManager(address(stakingManager), address(kHYPE));
         vm.stopPrank();

@@ -12,7 +12,7 @@ contract L1Write {
 
     function sendIocOrder(uint16 perp, bool isBuy, uint64 limitPx, uint64 sz) external {
         emit IocOrder(msg.sender, perp, isBuy, limitPx, sz);
-    }
+    } 
 
     function sendVaultTransfer(address vault, bool isDeposit, uint64 usd) external {
         emit VaultTransfer(msg.sender, vault, isDeposit, usd);

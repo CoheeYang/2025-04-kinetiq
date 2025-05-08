@@ -1,3 +1,7 @@
+# Intro
+一个基于HyperVM链的 liquidity staking协议
+
+
 # Kinetiq audit details
 - Total Prize Pool: $35,000 in USDC
   - HM awards: up to $28,500 USDC
